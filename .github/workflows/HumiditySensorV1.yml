@@ -1,23 +1,65 @@
 #define SENSOR_PIN A0  // HIH-5030 output connected to A0
-#define RED_LED 8     // LED for high humidity
-#define BLUE_LED 9      // LED for low humidity
-
+#define BLUE_LED 8      // LED for low humidity
+#define RED_LED 9     // LED for high humidity
 #define LOW_HUMIDITY 20   // Low humidity threshold
 #define HIGH_HUMIDITY 70  // High humidity threshold
+
+#include <EEPROM.h>
+#include <LiquidCrystal.h>
+
+int sensorValue;
+const unsigned int maxReadings = 168;
+float humidReadings[maxReadings] = {0};
+float tempReadings[maxReadings] = {0};
+unsigned long startMillis;  //some global variables available anywhere in the program
+unsigned long currentMillis;
+const unsigned long period = 3600000;	//1 hour to milliseconds
+int humidity;
+int temperature;
+int i;
 
 void setup() {
     Serial.begin(9600);
     pinMode(RED_LED, OUTPUT);
     pinMode(BLUE_LED, OUTPUT);
+    startMillis = millis();  //initial start time
 }
 
+void memoryStoreHumid(int currentHumidity)	{
+   if (humidReadings[i] == 0)	{
+      EEPROM.write(humidReadings[i], currentHumidity);
+      }
+   for (i = 0; i < 168; i++)	{
+      EEPROM.write(humidReadings[i+1], humidReadings[i]);
+      }
+   }
+
+void memoryStoreTemp(float currentTemperature)	{
+   if (tempReadings[i] == 0)	{
+      EEPROM.write(tempReadings[i], currentTemperature);
+      }
+   for (i = 0; i < 168; i++)	{
+      EEPROM.write(tempReadings[i+1], tempReadings[i]);
+      }
+   }
+
+
 void loop() {
-    int sensorValue = analogRead(SENSOR_PIN);  // Read raw ADC value (0-1023)
+    sensorValue = analogRead(SENSOR_PIN);  // Read raw ADC value (0-1023)
     
     // Map sensorValue from raw range to humidity (0% to 100%)
-    int humidity = map(sensorValue, (0.8 / 5.0) * 1023, (3.9 / 5.0) * 1023, 0, 100);
+    humidity = map(sensorValue, (0.8 / 5.0) * 1023, (3.9 / 5.0) * 1023, 0, 100);
     humidity = constrain(humidity, 0, 100); // Ensure humidity stays in valid range
 
+    currentMillis = millis();  //get the current "time" (actually the number of milliseconds since the program started)
+      if (currentMillis - startMillis >= period)  //test whether the period has elapsed
+    {
+      
+      memoryStoreHumid(humidity);
+      memoryStoreTemp(temperature);
+      startMillis = currentMillis;
+    }
+    
     Serial.print("Raw ADC: ");
     Serial.print(sensorValue);
     Serial.print(" | Humidity: ");
@@ -26,18 +68,19 @@ void loop() {
 
     // LED control logic
     if (humidity < LOW_HUMIDITY) {
-        digitalWrite(RED_LED, HIGH);
-        digitalWrite(BLUE_LED, LOW);
-    } 
-    else if (humidity > HIGH_HUMIDITY) {
         digitalWrite(RED_LED, LOW);
         digitalWrite(BLUE_LED, HIGH);
+    } 
+    else if (humidity > HIGH_HUMIDITY) {
+        digitalWrite(RED_LED, HIGH);
+        digitalWrite(BLUE_LED, LOW);
     } 
     else {
         digitalWrite(RED_LED, LOW);
         digitalWrite(BLUE_LED, LOW);
     }
 
-    delay(1000); 
-}
+    delay(250); 
 
+    
+    }
