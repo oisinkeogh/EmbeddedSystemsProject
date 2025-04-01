@@ -1,1 +1,43 @@
+#define SENSOR_PIN A0  // HIH-5030 output connected to A0
+#define RED_LED 8     // LED for high humidity
+#define BLUE_LED 9      // LED for low humidity
+
+#define LOW_HUMIDITY 20   // Low humidity threshold
+#define HIGH_HUMIDITY 70  // High humidity threshold
+
+void setup() {
+    Serial.begin(9600);
+    pinMode(RED_LED, OUTPUT);
+    pinMode(BLUE_LED, OUTPUT);
+}
+
+void loop() {
+    int sensorValue = analogRead(SENSOR_PIN);  // Read raw ADC value (0-1023)
+    
+    // Map sensorValue from raw range to humidity (0% to 100%)
+    int humidity = map(sensorValue, (0.8 / 5.0) * 1023, (3.9 / 5.0) * 1023, 0, 100);
+    humidity = constrain(humidity, 0, 100); // Ensure humidity stays in valid range
+
+    Serial.print("Raw ADC: ");
+    Serial.print(sensorValue);
+    Serial.print(" | Humidity: ");
+    Serial.print(humidity);
+    Serial.println("%");
+
+    // LED control logic
+    if (humidity < LOW_HUMIDITY) {
+        digitalWrite(RED_LED, HIGH);
+        digitalWrite(BLUE_LED, LOW);
+    } 
+    else if (humidity > HIGH_HUMIDITY) {
+        digitalWrite(RED_LED, LOW);
+        digitalWrite(BLUE_LED, HIGH);
+    } 
+    else {
+        digitalWrite(RED_LED, LOW);
+        digitalWrite(BLUE_LED, LOW);
+    }
+
+    delay(1000); 
+}
 
