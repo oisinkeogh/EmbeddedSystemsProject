@@ -1,0 +1,147 @@
+//LCD library
+#include <LiquidCrystal.h>
+//Initalizing LCD
+//Class	      Obj(RS, E, D4, D5, D6, D7);
+LiquidCrystal lcd(12, 11, 5, 6, 7, 8); 
+
+//Initializing pin that changes Temp values from
+const int unitPin = 4;
+
+//Example sensor variables
+float tempF = 69.7;
+float tempC = 10.4;
+int hum = 35;
+float tfAvg = 70.2;
+float tcAvg = 12.1;
+int tfVar = 59;
+int tcVar = 10;
+int hAvg = 18;
+int hVar = 165;
+
+void setup () {
+// TODO: put your setup code here, to run once:
+   
+//Initialising pin for Farenheight/Celsius Conversion
+   pinMode(unitPin, INPUT_PULLUP);
+   
+//LCD Starts
+   lcd.begin(20, 4);
+   
+//Print static labels (only once)
+//setCursor(Column, Row) sets the start point for the printing
+   lcd.setCursor(0, 0);
+   lcd.print("Monitoring");
+
+   lcd.setCursor(0, 1);
+   lcd.print("Temp=");
+   lcd.setCursor(12, 1);
+   lcd.print("Hum=");
+
+   lcd.setCursor(0, 2);
+   lcd.print("T-Avg:");
+   lcd.setCursor(12, 2);
+   lcd.print("T-Var:");
+
+   lcd.setCursor(0, 3);
+   lcd.print("H-Avg:");
+   lcd.setCursor(12, 3);
+   lcd.print("H-Var:");
+}
+
+void loop() {
+// TODO: put your main code here, to run repeatedly:
+  
+// Simulate new readings (you can use real sensor values here)
+   tempF += random(-5, 6) * 0.1;
+   tempC += random(-2, 3) * 0.1;
+   hum = constrain(hum + random(-2, 3), 20, 80);
+   tcVar = random(50, 70);
+   tfVar = random(6, 12);
+   hVar = random(150, 170);
+
+  
+//=== Update Temperature ===
+
+//After "Temp="
+   lcd.setCursor(5, 1);      
+
+//Clears the previous values in that area by replacing them with spaces
+//Used rather than LCD.clear() as it doesn't clear everything on lcd, making it more efficient
+   lcd.print("      ");      
+   lcd.setCursor(5, 1);
+
+//If LOW, celsius Temp, else Farenheight
+   if(digitalRead(unitPin)==LOW){
+      lcd.print(tempC, 1);
+
+//Degree symbol
+      lcd.print((char)223);     
+      lcd.print("C");
+   }
+   else{
+      lcd.print(tempF, 1);
+      lcd.print((char)223);     
+      lcd.print("F");
+   }
+   
+
+ 
+//=== Update Humidity ===
+
+//After "Hum="
+   lcd.setCursor(16, 1);     
+   lcd.print("   ");
+   lcd.setCursor(16, 1);
+   lcd.print(hum);
+   lcd.print("%");
+
+
+//== Update Temp Avg and Var ===
+
+//After "T-Avg:"
+   lcd.setCursor(6, 2);   
+   lcd.print("     ");
+   lcd.setCursor(6, 2);
+   if(digitalRead(unitPin)==LOW){
+      //Celsius Average
+      lcd.print(tcAvg, 1);
+   }
+   else{
+
+//Farenheight Average
+      lcd.print(tfAvg, 1);
+   }
+   
+//After "T-Var:"
+   lcd.setCursor(18, 2);     
+   lcd.print("   ");
+   lcd.setCursor(18, 2);
+if(digitalRead(unitPin)==LOW){
+  
+//Celsius Variance
+      lcd.print(tcVar, 1);
+   }
+   else{
+
+//Farenheight Variance
+      lcd.print(tfVar, 1);
+   }
+
+//=== Update Hum Avg and Var ===
+
+//After "H-Avg:"
+   lcd.setCursor(6, 3);      
+   lcd.print("     ");
+   lcd.setCursor(6, 3);
+   lcd.print(hAvg);
+   lcd.print("%");
+
+//After "H-Var:"
+   lcd.setCursor(18, 3);    
+   lcd.print("   ");
+   lcd.setCursor(18, 3);
+   lcd.print(hVar);
+
+//Update every 2 seconds
+   delay(2000);
+}
