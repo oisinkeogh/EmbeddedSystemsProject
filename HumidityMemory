@@ -1,3 +1,4 @@
+![alt text](https://imgur.com/a/VJfmEO3"Assembled")
 #define SENSOR_PIN A0  // HIH-5030 output connected to A0
 #define HUMID_BLUE_LED 8      // LED for low humidity
 #define HUMID_RED_LED 9     // LED for high humidity
