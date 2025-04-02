@@ -1,0 +1,90 @@
+#define SENSOR_PIN A0  // HIH-5030 output connected to A0
+#define HUMID_BLUE_LED 8      // LED for low humidity
+#define HUMID_RED_LED 9     // LED for high humidity
+#define LOW_HUMIDITY 20   // Low humidity threshold
+#define HIGH_HUMIDITY 70  // High humidity threshold
+
+#include <EEPROM.h>
+
+int sensorValue;
+const unsigned int maxReadings = 168;
+int humidReadings[maxReadings] = {0};
+float tempReadings[maxReadings] = {0};
+unsigned long startMillis;
+unsigned long currentMillis;
+const unsigned long period = 100; // 1 hour in milliseconds
+int humidity;
+float temperature = 25.0; // Example default temperature
+unsigned int currentIndexHumid = 0;
+unsigned int currentIndexTemp = 0;
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(HUMID_RED_LED, OUTPUT);
+    pinMode(HUMID_BLUE_LED, OUTPUT);
+    startMillis = millis();  // initial start time
+    
+    digitalWrite(HUMID_RED_LED, LOW);
+    digitalWrite(HUMID_BLUE_LED, LOW);
+}
+
+// Function to store humidity readings in EEPROM
+void memoryStoreHumid(int currentHumidity) {
+    humidReadings[currentIndexHumid] = currentHumidity; // Store in RAM array
+    EEPROM.write(currentIndexHumid, currentHumidity); // Store in EEPROM
+    
+    currentIndexHumid++;
+    if (currentIndexHumid >= maxReadings) {
+        currentIndexHumid = 0; // Wrap around
+    }
+}
+
+// Function to store temperature readings in EEPROM
+void memoryStoreTemp(float currentTemperature) {
+    tempReadings[currentIndexTemp] = currentTemperature; // Store in RAM array
+    EEPROM.put(currentIndexTemp * sizeof(float) + maxReadings, currentTemperature); // Store in EEPROM
+    
+    currentIndexTemp++;
+    if (currentIndexTemp >= maxReadings) {
+        currentIndexTemp = 0; // Wrap around
+    }
+}
+
+void loop() {
+    sensorValue = analogRead(SENSOR_PIN);  // Read raw ADC value (0-1023)
+    
+    // Convert ADC value to humidity percentage
+    int minADC = (int)((0.8 / 5.0) * 1023);
+    int maxADC = (int)((3.9 / 5.0) * 1023);
+    humidity = map(sensorValue, minADC, maxADC, 0, 100);
+    humidity = constrain(humidity, 0, 100); // Ensure humidity stays within 0-100%
+
+    currentMillis = millis();
+    if (currentMillis - startMillis >= period) { // Check if time interval has elapsed
+        memoryStoreHumid(humidity);
+        memoryStoreTemp(temperature);
+        startMillis = currentMillis;
+    }
+    
+    Serial.print("Raw ADC: ");
+    Serial.print(sensorValue);
+    Serial.print(" | Humidity: ");
+    Serial.print(humidity);
+    Serial.println("%");
+
+    // LED control logic
+    if (humidity < LOW_HUMIDITY) {
+        digitalWrite(HUMID_RED_LED, LOW);
+        digitalWrite(HUMID_BLUE_LED, HIGH);
+    } 
+    else if (humidity > HIGH_HUMIDITY) {
+        digitalWrite(HUMID_RED_LED, HIGH);
+        digitalWrite(HUMID_BLUE_LED, LOW);
+    } 
+    else {
+        digitalWrite(HUMID_RED_LED, LOW);
+        digitalWrite(HUMID_BLUE_LED, LOW);
+    }
+
+    delay(250); 
+}
