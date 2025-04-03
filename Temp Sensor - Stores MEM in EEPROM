@@ -1,0 +1,92 @@
+/* Main.ino file modified to read temperature every hour (every minute for testing)
+ *
+ * Processor: Arduino Uno
+ * Compiler:  Arduino AVR (Proteus)
+ */
+
+#pragma GCC push_options
+#pragma GCC optimize ("O1")
+
+#include <EEPROM.h> //Stores Temp readings
+#define TEMP_SENSOR_PIN A0
+#define RED_LED 3
+#define BLUE_LED 4
+//RED_LED for high Temp
+//BLUE_LED for low Temp
+
+const int MaxTemp = 30; // Maximum temperature (Celsius)
+const int MinTemp = 0;  // Minimum temperature (Celsius)
+const unsigned int maxReadingsAllowed = 168; //Stores the 168 temperature samples (1 per hour for 7 days of data)
+float tempReadings[maxReadingsAllowed] = {0}; //Array that holds the stored Temp values
+unsigned int currentIndexTemp = 0; //Keeps track of the current storage index in EEPROM
+const unsigned long interval = 3600000; //1 hour in milli seconds (change to 6000 for testing)
+unsigned long lastUpdateTime = 0; //Stores the last time a sample was taken
+
+void setup() {
+    pinMode(RED_LED, OUTPUT); // Red LED - Temp above MaxTemp
+    pinMode(BLUE_LED, OUTPUT); // Blue LED - Temp below MinTemp
+    digitalWrite(RED_LED, LOW);
+    digitalWrite(BLUE_LED, LOW);
+    //Turn both LEDs off in the beginning
+    Serial.begin(9600);
+    
+    //Reads previously stored Temp from EEPROM at startup
+    //Makes sure that even after a reset or power loss that the data is kept
+    for (unsigned int i = 0; i < maxReadingsAllowed; i++){
+      EEPROM.get(i * sizeof(float), tempReadings[i]);
+      }
+}
+
+//Saves the new Temp readings in the Ramp (tempReadings array) and EEPROM at its current index
+void storeTemps(float temp){
+   tempReadings[currentIndexTemp] = temp;
+   EEPROM.put(currentIndexTemp * sizeof(float), temp); //writes data in EEPROM
+   
+   currentIndexTemp++; //Incrementing currentIndexTemp
+   if (currentIndexTemp >= maxReadingsAllowed) {
+        currentIndexTemp = 0; //Once  the maxReadings is greater than the currentIndex, goes to the first reading to overwrite it
+    }
+}
+
+void loop() {
+    unsigned long currentMillis = millis(); 
+    if (currentMillis - lastUpdateTime >= interval) {
+        lastUpdateTime = currentMillis; //Updates to stop multiple readings in the same time intervals
+        //Tracks elapsed time to ensure that a new temp reading is stored only after an hour
+	
+        int sensorValue = analogRead(TEMP_SENSOR_PIN); //Reads ADC value from the temp sensor
+	
+        // Convert the analog value to voltage (0-5v range into a digital value from 0 to 1023)
+	float voltage = sensorValue * (5.0 / 1023.0);
+        //Voltage value depending on the value of sensorValue
+	
+	// Calculate temperature from voltage (TMP36 sensor, 0.5V at 25°C, 10mV/°C)
+	// At 0 celcius it outputs 0.5v, which is increaded by 0.01V per degrees
+	float temperature = (voltage - 0.5) / 0.01;
+        // Since 0.5v is the base for 0 degrees, subtract
+    	// Since each degrees is 0.01v, divide by that amount
+	
+        Serial.print("Temperature: ");
+        Serial.print(temperature);
+        Serial.println(" °C");
+        
+        storeTemps(temperature);
+	//Calls the storeTemperature() to save the reading in RAM and EEPROM
+
+        if (temperature < MinTemp) {
+            digitalWrite(BLUE_LED, HIGH); 	// Turns on Blue LED (Temp below MinTemp)
+            digitalWrite(RED_LED, LOW);		// Turns Red LED off
+        } 
+	else if (temperature > MaxTemp) {
+            digitalWrite(RED_LED, HIGH);	// Turns on Red LED (Temp above MaxTemp)
+            digitalWrite(BLUE_LED, LOW);	// Turns Blue LED off
+        } 
+	else {
+            digitalWrite(RED_LED, LOW);		// Turns off Red LED (Temp within range)
+            digitalWrite(BLUE_LED, LOW);	// Turns off Blue LED (Temp within range)
+        }
+    }
+    delay(1000); // Short delay to avoid excessive looping
+}
+
+#pragma GCC pop_options
