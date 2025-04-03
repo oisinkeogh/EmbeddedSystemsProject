@@ -5,7 +5,7 @@
 #define HUMID_RED_LED 9     // LED for high humidity
 #define TEMP_BLUE_LED 2    // LED for low temperature
 #define TEMP_RED_LED 3     // LED for high temperature
-#define unitPin 1           // Switch used to change temp between Fahrenheit to Celsius
+#define unitPin 10           // Switch used to change temp between Fahrenheit to Celsius
 
 #define LOW_HUMIDITY 20     // Low humidity threshold
 #define HIGH_HUMIDITY 70    // High humidity threshold
