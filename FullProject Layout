@@ -1,1 +1,260 @@
-![Image](https://github.com/user-attachments/assets/a209b48e-0682-4a8f-aa71-f9e91e29196a)
+#define HUMID_SENSOR_PIN A0  // HIH-5030 Sensor connected to pin A0
+#define TEMP_SENSOR_PIN A1   // TMP36 Sensor connected to pin A1
+
+#define HUMID_BLUE_LED 8    // LED for low humidity
+#define HUMID_RED_LED 9     // LED for high humidity
+#define TEMP_BLUE_LED 2    // LED for low temperature
+#define TEMP_RED_LED 3     // LED for high temperature
+#define unitPin 1           // Switch used to change temp between Fahrenheit to Celsius
+
+#define LOW_HUMIDITY 20     // Low humidity threshold
+#define HIGH_HUMIDITY 70    // High humidity threshold
+#define MAX_TEMP 30	    // Max temperature threshold
+#define MIN_TEMP 0          // Min temperature threshold
+
+
+#include <EEPROM.h>		//library for memory storage
+#include <LiquidCrystal.h>	//library for LCD Display
+
+// Initializing LCD
+// Class      Obj(RS, E, D4, D5, D6, D7);
+LiquidCrystal lcd(12, 11, 4, 5, 6, 7);
+
+int humidSensor;	//for taking in value direct from sensor reading
+int tempSensor;
+
+const unsigned int maxReadings = 168;	//Taken every hour, for a week; 1 * 24 * 7 = 168
+float humidReadings[maxReadings] = {0};	//for storing recorded values taken from sensors
+float tempReadings[maxReadings] = {0};
+
+unsigned long startMillis;	//for accurate time keeping
+unsigned long currentMillis;
+const unsigned long interval = 3600000; // 1 hour in milliseconds
+const unsigned long testInterval = 6000; // 6 seconds for testing
+
+float humidity;		//for final humidity values / 0% - 100%
+float temperature;  	//for final temp values / 0 - 30
+float tempF;		//conversion for temperatures
+float tempVoltage;	//for recording sensor voltage values for calculating
+float humidVoltage;
+float tempFAvg;		//averaging variables
+float tempCAvg;
+float humidAvg;
+float tempFVar;		//variance varibales
+float tempCVar;
+float humidVar;
+
+unsigned int currentIndexHumid = 0;	//for record keeping for indexing in array
+unsigned int currentIndexTemp = 0;
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(HUMID_RED_LED, OUTPUT);	// Red LED - Humid above High Humidity
+    pinMode(HUMID_BLUE_LED, OUTPUT);	// Blue LED - Humid below Low Humidity
+    pinMode(TEMP_RED_LED, OUTPUT); 	// Red LED - Temp above MaxTemp
+    pinMode(TEMP_BLUE_LED, OUTPUT); 	// Blue LED - Temp below MinTemp
+    startMillis = millis();  		// Initial start time
+    
+    // Initializing pin for Fahrenheit/Celsius Conversion
+    pinMode(unitPin, INPUT_PULLUP);
+   
+    // LCD Starts
+    lcd.begin(20, 4);
+   
+    // Print static labels (only once)
+    // setCursor(Column, Row) sets the start point for the printing
+    lcd.setCursor(0, 0);
+    lcd.print("Monitoring");
+
+    lcd.setCursor(0, 1);
+    lcd.print("Temp=");
+    lcd.setCursor(12, 1);
+    lcd.print("Hum=");
+
+    lcd.setCursor(0, 2);
+    lcd.print("TAvg:");
+    lcd.setCursor(11, 2);
+    lcd.print("TVar:");
+
+    lcd.setCursor(0, 3);
+    lcd.print("HAvg:");
+    lcd.setCursor(11, 3);
+    lcd.print("HVar:");
+    
+    //Reads previously stored Temp from EEPROM at startup
+    //Makes sure that even after a reset or power loss that the data is kept
+    for (unsigned int i = 0; i < maxReadings; i++){
+      EEPROM.get(i * sizeof(float), tempReadings[i]);
+   }
+}
+
+void LEDUpdating()	{
+    // LED control logic
+    if (humidity < LOW_HUMIDITY) {		//if humidity below 20, blue LED turns on  
+        digitalWrite(HUMID_BLUE_LED, HIGH);
+    } else if (humidity > HIGH_HUMIDITY) {	//if humidity above 70, red LED turns on
+        digitalWrite(HUMID_RED_LED, HIGH);
+    } else {					//if between 20 and 70, both LEDs off
+        digitalWrite(HUMID_RED_LED, LOW);
+        digitalWrite(HUMID_BLUE_LED, LOW);
+    }
+
+    if (temperature < MIN_TEMP) {
+        digitalWrite(4, HIGH);  // Turns on Blue LED (Temp below MinTemp)
+        digitalWrite(3, LOW);   // Turns Red LED is off
+    } 
+    else if (temperature > MAX_TEMP) {
+        digitalWrite(3, HIGH);  // Turns on Red LED (Temp above MaxTemp)
+        digitalWrite(4, LOW);   // Turns Blue LED is off
+    } 
+    else {
+        digitalWrite(3, LOW);   // Turns off Red LED (Temp within range)
+        digitalWrite(4, LOW);   // Turns off Blue LED (Temp within range)
+    }
+}
+// Function to store humidity readings 
+void storeHumid(int currentHumidity) {
+    humidReadings[currentIndexHumid] = currentHumidity; // assigns value of current humidity to array
+    EEPROM.write(currentIndexHumid, currentHumidity); // Store in EEPROM
+    
+    currentIndexHumid++;
+    if (currentIndexHumid >= maxReadings) {	//once it reaches 168 stored recordings, loops back to start and writes over oldest data
+        currentIndexHumid = 0; 
+    }
+}
+
+//Saves the new Temp readings in the Ramp (tempReadings array) and EEPROM at its current index
+void storeTemp(float temp){
+   tempReadings[currentIndexTemp] = temp;
+   EEPROM.put(currentIndexTemp * sizeof(float), temp); //writes data in EEPROM
+   
+   currentIndexTemp++; //Incrementing currentIndexTemp
+   if (currentIndexTemp >= maxReadings) {
+        currentIndexTemp = 0; //Once  the maxReadings is greater than the currentIndex, goes to the first reading to overwrite it
+    }
+}
+
+float average(float arr[], int size) {	//function for averaging results
+    if (size == 0) return 0;		//if no data to average, returns zero
+    float sum = 0;			//initialize variable for addition 
+    for (int i = 0; i < size; i++) {	//loops to ensure all values are added that have been recorded
+        sum += arr[i];
+    }
+    return sum / size;	//gets the average
+}
+
+float variance(float arr[], int size) {
+    if (size == 0) return 0;	//if no data to average, returns zero
+    float mean = average(arr, size);	//calls average function
+    float variance = 0;		//initialize variable
+    for (int i = 0; i < size; i++) {
+        variance += (arr[i] - mean)*(arr[i]-mean); //checks the difference between the current index data and the overall data
+    }
+    return variance / size;
+}
+
+void loop() {
+    currentMillis = millis();	//ensures correct time keeping
+    if (currentMillis - startMillis >= testInterval) { // Check if time interval has elapsed
+    
+    // Read the analog value from the temperature sensor
+    // Arduino reads this value between 0 and 1023
+    humidSensor = analogRead(HUMID_SENSOR_PIN); 
+    tempSensor = analogRead(TEMP_SENSOR_PIN);  
+    
+    // Convert the analog value to voltage (0-5v range into a digital value from 0 to 1023)
+    tempVoltage = tempSensor * (5.0 / 1023.0); // Convert to voltage (for a 5V reference)
+    humidVoltage = humidSensor * (5.0 / 1023.0);
+    
+    //Voltage value depending on the value of Sensor Values
+    
+    // Calculate temperature from voltage (TMP36 sensor, 0.5V at 25°C, 10mV/°C)
+    // At 0 celcius it outputs 0.5v, which is increaded by 0.01V per degrees
+    temperature = (tempVoltage - 0.5) / 0.01;
+    tempF = (temperature * (9/5)) + 32;
+    // Since 0.5v is the base for 0 degrees, subtract
+    // Since each degrees is 0.01v, divide by that amount
+    
+    //minimum voltage for the humidity sensor is 0.8V and maximum is 3.5V
+    //subtract the minimum voltage from the humidity voltage after it has been converted and also take 0.8 from 3.5 to get base voltage of both
+    humidity = (humidVoltage - 0.8) / 2.7 * 100;
+   
+    storeHumid(humidity);	//stores the current values
+    storeTemp(temperature);
+	
+    Serial.print("Raw ADC: ");	//displaying the raw data for error checking
+    Serial.print(humidSensor);
+    Serial.print("Raw ADC: ");	 
+    Serial.print(tempSensor);
+    Serial.print(" | Humidity: ");
+    Serial.print(humidity);	//displaying actual values to serial for error checking
+    Serial.println("%");
+    Serial.print("Temperature: ");
+    Serial.print(temperature);
+    Serial.println(" °C");
+    
+    //=== Update Temperature ===
+    lcd.setCursor(5, 1);      
+    lcd.print("      ");      
+    lcd.setCursor(5, 1);
+
+    // If LOW, Celsius Temp, else Fahrenheit
+    if (digitalRead(unitPin) == LOW) {
+        lcd.print(temperature, 1);
+        lcd.print((char)223);     
+        lcd.print("C");
+    } else {
+        lcd.print(tempF, 1);
+        lcd.print((char)223);     
+        lcd.print("F");
+    }
+
+    //=== Update Humidity ===
+    lcd.setCursor(16, 1);     
+    lcd.print("   ");
+    lcd.setCursor(16, 1);
+    lcd.print(humidity);
+    lcd.print("%");
+
+    //== Update Temp Avg and Var ===
+    tempCAvg = average(tempReadings, currentIndexTemp);
+    lcd.setCursor(5, 2);   
+    lcd.print("     ");
+    lcd.setCursor(5, 2);
+    if (digitalRead(unitPin) == LOW) {
+        lcd.print(tempCAvg, 1);
+    } else {
+        tempFAvg = average(tempReadings, currentIndexTemp);
+        lcd.print(tempFAvg, 1);
+    }
+   
+    lcd.setCursor(16, 2);     
+    lcd.print("   ");
+    lcd.setCursor(16, 2);
+    if (digitalRead(unitPin) == LOW) {
+        tempCVar = variance(tempReadings, currentIndexTemp);
+        lcd.print(tempCVar, 1);
+    } else {
+        tempFVar = variance(tempReadings, currentIndexTemp);
+        lcd.print(tempFVar, 1);
+    }
+
+    //=== Update Hum Avg and Var ===
+    humidAvg = average(humidReadings, currentIndexHumid);
+    lcd.setCursor(5, 3);      
+    lcd.print("     ");
+    lcd.setCursor(5, 3);
+    lcd.print(humidAvg, 1);
+    lcd.print("%");
+   
+    humidVar = variance(humidReadings, currentIndexHumid);
+    lcd.setCursor(16, 3);    
+    lcd.print("   ");
+    lcd.setCursor(16, 3);
+    lcd.print(humidVar, 1);
+
+    LEDUpdating();	//updates error LEDs 
+    
+    startMillis = currentMillis;	//update runtimes
+    }
+}
