@@ -12,6 +12,9 @@
 #define MAX_TEMP 30	    // Max temperature threshold
 #define MIN_TEMP 0          // Min temperature threshold
 
+// Humidity and Temperature Sensor Project
+// Project by Oisin Keogh, Simon Thibault and JP Gonzaga
+// Robotics and Automation Systems 2025
 
 #include <EEPROM.h>		//library for memory storage
 #include <LiquidCrystal.h>	//library for LCD Display
