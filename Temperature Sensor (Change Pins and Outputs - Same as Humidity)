@@ -1,0 +1,57 @@
+/* Main.ino file modified to read temperature every hour (every minute for testing)
+ *
+ * Processor: Arduino Uno
+ * Compiler:  Arduino AVR (Proteus)
+ */
+
+#pragma GCC push_options
+#pragma GCC optimize ("O1")
+
+const int MaxTemp = 30; // Maximum temperature (Celsius)
+const int MinTemp = 0;  // Minimum temperature (Celsius)
+const int tempPin = A0; // Pin for the temperature sensor (analog sensor)
+const unsigned long interval = 3600000; // 1 hour in milliseconds
+const unsigned long testInterval = 6000; // 6 seconds for testing
+
+void setup() {
+    pinMode(3, OUTPUT); // Red LED - Temp above MaxTemp
+    pinMode(4, OUTPUT); // Blue LED - Temp below MinTemp
+    Serial.begin(9600);
+}
+
+void loop() {
+    // Read the analog value from the temperature sensor
+    // Arduino reads this value between 0 and 1023
+    int sensorValue = analogRead(tempPin);
+
+    // Convert the analog value to voltage (0-5v range into a digital value from 0 to 1023)
+    float voltage = sensorValue * (5.0 / 1023.0); // Convert to voltage (for a 5V reference)
+    //Voltage value depending on the value of sensorValue
+    
+    // Calculate temperature from voltage (TMP36 sensor, 0.5V at 25°C, 10mV/°C)
+    // At 0 celcius it outputs 0.5v, which is increaded by 0.01V per degrees
+    float temperature = (voltage - 0.5) / 0.01;
+    // Since 0.5v is the base for 0 degrees, subtract
+    // Since each degrees is 0.01v, divide by that amount
+    
+    Serial.print("Temperature: ");
+    Serial.print(temperature);
+    Serial.println(" °C");
+
+    if (temperature < MinTemp) {
+        digitalWrite(4, HIGH);  // Turns on Blue LED (Temp below MinTemp)
+        digitalWrite(3, LOW);   // Turns Red LED is off
+    } 
+    else if (temperature > MaxTemp) {
+        digitalWrite(3, HIGH);  // Turns on Red LED (Temp above MaxTemp)
+        digitalWrite(4, LOW);   // Turns Blue LED is off
+    } 
+    else {
+        digitalWrite(3, LOW);   // Turns off Red LED (Temp within range)
+        digitalWrite(4, LOW);   // Turns off Blue LED (Temp within range)
+    }
+
+    delay(testInterval); // Delay before reading temp (change to diff values depending on testing or not)
+}
+
+#pragma GCC pop_options
